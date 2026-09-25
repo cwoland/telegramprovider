@@ -56,6 +56,26 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         [credentials],
     );
 
+    const loadAvatar = useCallback(
+        (chatId: string) => {
+            if (client === null || avatarRequestRef.current.has(chatId)) return;
+            avatarRequestRef.current.add(chatId);
+
+            void client
+                .getAvatar(chatId)
+                .then((avatarUrl) => {
+                    if (avatarUrl !== null) {
+                        dispatch({ type: 'chat/avatar', payload: { chatId, avatarUrl } });
+                    }
+                })
+                .catch((avatarError: unknown) => {
+                    console.warn('Не удалось получить аватар', chatId, avatarError);
+                    avatarRequestRef.current.delete(chatId);
+                });
+        },
+        [client],
+    );
+
     const handleNotification = useCallback((body: NotificationBody) => {
         setError(null);
 
@@ -66,7 +86,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             type: 'message/received',
             payload: { message, chatTitle: resolveTitle(body, message) },
         });
-    }, []);
+        loadAvatar(message.chatId);
+    }, [loadAvatar]);
 
     const handlePollingError = useCallback((pollingError: unknown) => {
         setError(toErrorMessage(pollingError));
@@ -126,36 +147,32 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         avatarRequestRef.current.clear();
     }, []);
 
-    const loadAvatar = useCallback(
-        (chatId: string) => {
-            if (client === null || avatarRequestRef.current.has(chatId)) return;
-            avatarRequestRef.current.add(chatId);
+    const openChat = useCallback(
+        async (recipient: string): Promise<ActionResult> => {
+            const parsed = parseRecipient(recipient);
+            if (!parsed.ok) return parsed;
+            if (client === null) return { ok: false, error: 'Нет активного подключения' };
 
-            void client
-                .getAvatar(chatId)
-                .then((avatarUrl) => {
-                    if (avatarUrl !== null) {
-                        dispatch({ type: 'chat/avatar', payload: { chatId, avatarUrl } });
-                    }
-                })
-                .catch(() => {
-                    avatarRequestRef.current.delete(chatId);
-                });
+            let account;
+            try {
+                account = await client.checkAccount(chatIdToDigits(parsed.chatId));
+            } catch (checkError) {
+                return { ok: false, error: toErrorMessage(checkError) };
+            }
+
+            if (!account.exist || !account.chatId) {
+                return { ok: false, error: 'У этого номера нет Telegram' };
+            }
+
+            dispatch({
+                type: 'chat/opened',
+                payload: { chat: { chatId: account.chatId, title: parsed.display } },
+            });
+            loadAvatar(account.chatId);
+            return { ok: true };
         },
-        [client],
+        [client, loadAvatar],
     );
-
-    const openChat = useCallback((recipient: string): ActionResult => {
-        const parsed = parseRecipient(recipient);
-        if (!parsed.ok) return parsed;
-
-        dispatch({
-            type: 'chat/opened',
-            payload: { chat: { chatId: parsed.chatId, title: parsed.display } },
-        });
-        loadAvatar(parsed.chatId);
-        return { ok: true };
-    }, [loadAvatar]);
 
     const selectChat = useCallback((chatId: string) => {
         dispatch({ type: 'chat/selected', payload: { chatId } });

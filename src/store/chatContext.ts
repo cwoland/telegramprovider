@@ -12,7 +12,7 @@ export interface ChatContextValue {
 
     login(credentials: Credentials): Promise<ActionResult>;
     logout(): void;
-    openChat(recipient: string): ActionResult;
+    openChat(recipient: string): Promise<ActionResult>;
     selectChat(chatId: string): void;
     closeChat(): void;
     sendMessage(text: string): Promise<void>;

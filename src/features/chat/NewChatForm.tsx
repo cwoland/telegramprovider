@@ -6,11 +6,15 @@ export function NewChatForm() {
     const { openChat } = useChat();
     const [value, setValue] = useState('');
     const [error, setError] = useState<string | null>(null);
+    const [isPending, setIsPending] = useState(false);
 
-    const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
 
-        const result = openChat(value);
+        setIsPending(true);
+        const result = await openChat(value);
+        setIsPending(false);
+
         if (result.ok) {
             setValue('');
             setError(null);
@@ -36,11 +40,16 @@ export function NewChatForm() {
                     placeholder="+7 999 123-45-67"
                     inputMode="tel"
                     autoComplete="off"
+                    disabled={isPending}
                     aria-invalid={error !== null}
                     aria-describedby={error === null ? undefined : 'recipient-error'}
                 />
-                <button className={styles.submit} type="submit" disabled={value.trim() === ''}>
-                    Создать
+                <button
+                    className={styles.submit}
+                    type="submit"
+                    disabled={isPending || value.trim() === ''}
+                >
+                    {isPending ? 'Ищем…' : 'Создать'}
                 </button>
             </div>
             {error !== null && (

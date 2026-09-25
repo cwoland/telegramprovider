@@ -7,6 +7,7 @@ import type {
   GetAvatarResponse,
   InstanceSettings,
   SettingsPatch,
+  CheckAccountResponse,
 } from './types';
 
 export const DEFAULT_API_URL = 'https://api.green-api.com';
@@ -139,6 +140,8 @@ export interface GreenApiClient {
   getSettings(options?: RequestOptions): Promise<InstanceSettings>;
   setSettings(patch: SettingsPatch, options?: RequestOptions): Promise<void>;
   getAvatar(chatId: string, options?: RequestOptions): Promise<string | null>;
+  /** Проверяет наличие Telegram по номеру и возвращает канонический chatId. */
+  checkAccount(phoneNumber: string, options?: RequestOptions): Promise<CheckAccountResponse>;
 }
 
 export function createGreenApiClient(credentials: Credentials): GreenApiClient {
@@ -222,6 +225,20 @@ export function createGreenApiClient(credentials: Credentials): GreenApiClient {
       );
       const avatar = data?.urlAvatar ?? '';
       return avatar === '' ? null : avatar;
+    },
+
+    async checkAccount(phoneNumber, options) {
+      const url = buildUrl(credentials, 'checkAccount');
+      const data = await request<CheckAccountResponse>(
+        url,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phoneNumber: Number(phoneNumber) }),
+        },
+        options,
+      );
+      return requireBody(data, url);
     },
   };
 }

@@ -85,3 +85,11 @@ export type SettingsPatch = Partial<Record<keyof InstanceSettings, string>>;
 export interface GetAvatarResponse {
     urlAvatar?: string;
 }
+
+export interface CheckAccountResponse {
+    exist: boolean;
+    chatId?: string;
+    username?: string;
+    phoneNumber?: number;
+    fromCache?: boolean;
+}
