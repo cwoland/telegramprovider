@@ -39,6 +39,12 @@ export default defineConfig([
     files: ['src/**/*.test.{ts,tsx}', 'src/test/**/*.{ts,tsx}', 'src/setupTests.ts'],
     extends: [testingLibrary.configs['flat/react'], jestDom.configs['flat/recommended']],
   },
+  {
+    files: ['src/setupTests.ts'],
+    rules: {
+      'testing-library/no-manual-cleanup': 'off',
+    },
+  },
 
   prettier,
 ]);
