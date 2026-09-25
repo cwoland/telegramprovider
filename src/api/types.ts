@@ -70,3 +70,18 @@ export interface StateInstanceResponse {
 export interface DeleteNotificationResponse {
     result: boolean;
 }
+
+export interface InstanceSettings {
+    webhookUrl?: string;
+    incomingWebhook?: string;
+    outgoingWebhook?: string;
+    outgoingMessageWebhook?: string;
+    outgoingAPIMessageWebhook?: string;
+    stateWebhook?: string;
+}
+
+export type SettingsPatch = Partial<Record<keyof InstanceSettings, string>>;
+
+export interface GetAvatarResponse {
+    urlAvatar?: string;
+}

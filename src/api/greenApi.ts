@@ -4,6 +4,9 @@ import type {
   ReceiveNotificationResponse,
   SendMessageResponse,
   StateInstanceResponse,
+  GetAvatarResponse,
+  InstanceSettings,
+  SettingsPatch,
 } from './types';
 
 export const DEFAULT_API_URL = 'https://api.green-api.com';
@@ -133,6 +136,9 @@ export interface GreenApiClient {
     options?: RequestOptions & { receiveTimeout?: number },
   ): Promise<ReceiveNotificationResponse | null>;
   deleteNotification(receiptId: number, options?: RequestOptions): Promise<boolean>;
+  getSettings(options?: RequestOptions): Promise<InstanceSettings>;
+  setSettings(patch: SettingsPatch, options?: RequestOptions): Promise<void>;
+  getAvatar(chatId: string, options?: RequestOptions): Promise<string | null>;
 }
 
 export function createGreenApiClient(credentials: Credentials): GreenApiClient {
@@ -182,6 +188,40 @@ export function createGreenApiClient(credentials: Credentials): GreenApiClient {
       const url = buildUrl(credentials, 'deleteNotification', receiptId);
       const data = await request<DeleteNotificationResponse>(url, { method: 'DELETE' }, options);
       return data?.result ?? false;
+    },
+
+    async getSettings(options) {
+      const url = buildUrl(credentials, 'getSettings');
+      const data = await request<InstanceSettings>(url, { method: 'GET' }, options);
+      return requireBody(data, url);
+    },
+
+    async setSettings(patch, options) {
+      const url = buildUrl(credentials, 'setSettings');
+      await request<unknown>(
+        url,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        },
+        options,
+      );
+    },
+
+    async getAvatar(chatId, options) {
+      const url = buildUrl(credentials, 'getAvatar');
+      const data = await request<GetAvatarResponse>(
+        url,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chatId }),
+        },
+        options,
+      );
+      const avatar = data?.urlAvatar ?? '';
+      return avatar === '' ? null : avatar;
     },
   };
 }

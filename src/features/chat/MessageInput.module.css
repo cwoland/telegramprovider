@@ -1,0 +1,48 @@
+.form {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.field {
+  flex: 1;
+  min-width: 0;
+  max-height: 140px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  resize: none;
+  /* Поддерживается не везде; без неё textarea просто остаётся в одну строку. */
+  field-sizing: content;
+}
+
+.field[aria-invalid='true'] {
+  border-color: var(--color-danger);
+}
+
+.counter {
+  padding-bottom: 12px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.counter[data-over='true'] {
+  color: var(--color-danger);
+}
+
+.send {
+  padding: 10px 16px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  white-space: nowrap;
+}
+
+.send:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}

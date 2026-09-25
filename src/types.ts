@@ -20,4 +20,5 @@ export interface ChatMessage {
 export interface Chat {
   chatId: string;
   title: string;
+  avatarUrl?: string;
 }

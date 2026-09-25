@@ -2,9 +2,17 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
+import { ChatProvider } from './store/ChatProvider.tsx';
 
-createRoot(document.getElementById('root')!).render(
+const container = document.getElementById('root');
+if (container === null) {
+  throw new Error('Не найден контейнер в index.html');
+}
+
+createRoot(container).render(
   <StrictMode>
-    <App />
+    <ChatProvider>
+      <App />
+    </ChatProvider>
   </StrictMode>,
-)
+);

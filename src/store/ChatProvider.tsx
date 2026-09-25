@@ -1,7 +1,7 @@
-import { useCallback, useMemo, useReducer, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useReducer, useState, useRef, type ReactNode } from 'react';
 import { GreenApiError, createGreenApiClient } from '../api/greenApi';
 import { resolveChatTitle, toChatMessage } from '../api/notification';
-import type { NotificationBody } from '../api/types';
+import type { NotificationBody, SettingsPatch } from '../api/types';
 import { useNotificationPolling } from '../hooks/useNotificationPolling';
 import { chatIdToDigits, formatPhone, parseRecipient } from '../lib/phone';
 import { clearCredentials, loadCredentials, saveCredentials } from '../lib/storage';
@@ -17,6 +17,12 @@ const STATE_MESSAGES: Record<string, string> = {
     sleepMode: 'Инстанс в спящем режиме: устройство в данный момент не в сети',
     starting: 'Инстанс запускается, попробуйте через несколько секунд',
     yellowCard: 'Инстанс ограничен',
+};
+
+const REQUIRED_SETTINGS: SettingsPatch = {
+  incomingWebhook: 'yes',
+  outgoingMessageWebhook: 'yes',
+  outgoingAPIMessageWebhook: 'yes',
 };
 
 let localIdCounter = 0;
@@ -43,6 +49,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const [credentials, setCredentials] = useState<Credentials | null>(loadCredentials);
     const [state, dispatch] = useReducer(chatReducer, initialChatState);
     const [error, setError] = useState<string | null>(null);
+    const avatarRequestRef = useRef(new Set<string>());
 
     const client = useMemo(
         () => (credentials === null ? null : createGreenApiClient(credentials)),
@@ -73,22 +80,42 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     });
 
     const login = useCallback(async (next: Credentials): Promise<ActionResult> => {
-        try {
-            const { stateInstance } = await createGreenApiClient(next).getStateInstance();
-            if (stateInstance !== 'authorized') {
-                return {
-                    ok: false,
-                    error: STATE_MESSAGES[stateInstance] ?? `Инстанс в состоянии "${stateInstance}"`,
-                };
-            }
-        } catch (loginError) {
-            return { ok: false, error: toErrorMessage(loginError) };
-        }
+    const probe = createGreenApiClient(next);
 
-        saveCredentials(next);
-        setCredentials(next);
-        setError(null);
-        return { ok: true };
+    try {
+      const { stateInstance } = await probe.getStateInstance();
+      if (stateInstance !== 'authorized') {
+        return {
+          ok: false,
+          error: STATE_MESSAGES[stateInstance] ?? `Инстанс в состоянии «${stateInstance}»`,
+        };
+      }
+
+      const settings = await probe.getSettings();
+
+      if ((settings.webhookUrl ?? '').trim() !== '') {
+        return {
+          ok: false,
+          error:
+            'В настройках инстанса задан webhookUrl — уведомления уходят на ваш сервер, ' +
+            'а не в очередь HTTP API. Очистите webhookUrl в личном кабинете GREEN-API.',
+        };
+      }
+
+      const isMissing = Object.entries(REQUIRED_SETTINGS).some(
+        ([key, value]) => settings[key as keyof typeof settings] !== value,
+      );
+        if (isMissing) {
+            await probe.setSettings(REQUIRED_SETTINGS);
+        }
+    } catch (loginError) {
+        return { ok: false, error: toErrorMessage(loginError) };
+    }
+
+    saveCredentials(next);
+    setCredentials(next);
+    setError(null);
+    return { ok: true };
     }, []);
 
     const logout = useCallback(() => {
@@ -96,7 +123,27 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setCredentials(null);
         setError(null);
         dispatch({ type: 'state/reset' });
+        avatarRequestRef.current.clear();
     }, []);
+
+    const loadAvatar = useCallback(
+        (chatId: string) => {
+            if (client === null || avatarRequestRef.current.has(chatId)) return;
+            avatarRequestRef.current.add(chatId);
+
+            void client
+                .getAvatar(chatId)
+                .then((avatarUrl) => {
+                    if (avatarUrl !== null) {
+                        dispatch({ type: 'chat/avatar', payload: { chatId, avatarUrl } });
+                    }
+                })
+                .catch(() => {
+                    avatarRequestRef.current.delete(chatId);
+                });
+        },
+        [client],
+    );
 
     const openChat = useCallback((recipient: string): ActionResult => {
         const parsed = parseRecipient(recipient);
@@ -106,11 +153,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             type: 'chat/opened',
             payload: { chat: { chatId: parsed.chatId, title: parsed.display } },
         });
+        loadAvatar(parsed.chatId);
         return { ok: true };
-    }, []);
+    }, [loadAvatar]);
 
     const selectChat = useCallback((chatId: string) => {
         dispatch({ type: 'chat/selected', payload: { chatId } });
+    }, []);
+
+    const closeChat = useCallback(() => {
+        dispatch({ type: 'chat/closed' });
     }, []);
 
     const { activeChatId } = state;
@@ -166,6 +218,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             logout,
             openChat,
             selectChat,
+            closeChat,
             sendMessage,
             dismissError,
         }),
@@ -179,6 +232,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             logout,
             openChat,
             selectChat,
+            closeChat,
             sendMessage,
             dismissError,
         ],

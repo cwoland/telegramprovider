@@ -14,6 +14,7 @@ export interface ChatContextValue {
     logout(): void;
     openChat(recipient: string): ActionResult;
     selectChat(chatId: string): void;
+    closeChat(): void;
     sendMessage(text: string): Promise<void>;
     dismissError(): void;
 }

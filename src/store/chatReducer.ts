@@ -15,6 +15,8 @@ export const initialChatState: ChatState = {
 export type ChatAction = 
     | { type: 'chat/opened'; payload: { chat: Chat } }
     | { type: 'chat/selected'; payload: { chatId: string } }
+    | { type: 'chat/avatar'; payload: { chatId: string; avatarUrl: string } }
+    | { type: 'chat/closed' }
     | { type: 'message/queued'; payload: { message: ChatMessage } }
     | {
         type: 'message/sent'; 
@@ -67,6 +69,17 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
 
         case 'chat/selected': 
             return { ...state, activeChatId: action.payload.chatId };
+
+        case 'chat/avatar': {
+            const { chatId, avatarUrl } = action.payload;
+            return {
+                ...state,
+                chats: state.chats.map((chat) => chat.chatId === chatId ? { ...chat, avatarUrl } : chat),
+            };
+        }
+
+        case 'chat/closed':
+            return { ...state, activeChatId: null };
         
         case 'message/queued': {
             const { message } = action.payload;

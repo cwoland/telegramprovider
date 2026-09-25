@@ -1,0 +1,22 @@
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  font-size: 13px;
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+}
+
+.close {
+  border: none;
+  background: none;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 4px;
+}
