@@ -18,6 +18,11 @@ export function extractText(messageData: MessageData | undefined): string | null
         return typeof text === 'string' ? text : null;
     }
 
+    if (messageData.typeMessage === 'extendedTextMessage') {
+        const text = messageData.extendedTextMessageData?.text;
+        return typeof text === 'string' ? text : null;
+    }
+
     return null;
 }
 
