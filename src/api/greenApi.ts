@@ -33,7 +33,11 @@ export class GreenApiError extends Error {
 }
 
 export function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === 'AbortError';
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { name?: unknown }).name === 'AbortError'
+  );
 }
 
 export function redactUrl(url: string): string {

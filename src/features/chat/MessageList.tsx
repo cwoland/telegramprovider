@@ -81,7 +81,7 @@ export function MessageList() {
 
     if (messages.length === 0) {
         return (
-            <div className={styles.list} role="log" aria-label="История сообщений">
+            <div key={activeChatId} className={styles.list} role="log" aria-label="История сообщений">
                 <div className={styles.empty}>
                     <p className={styles.emptyTitle}>Сообщений пока нет</p>
                     <p className={styles.emptyHint}>
@@ -95,6 +95,7 @@ export function MessageList() {
 
     return (
         <div
+            key={activeChatId}
             className={styles.list}
             ref={containerRef}
             onScroll={handleScroll}

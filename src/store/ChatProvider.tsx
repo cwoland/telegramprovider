@@ -298,10 +298,28 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         [activeChatId, state.messagesByChat],
     );
 
+    const lastMessages = useMemo(() => {
+        const result: Record<string, ChatMessage> = {};
+        for (const [chatId, list] of Object.entries(state.messagesByChat)) {
+            const last = list[list.length - 1];
+            if (last !== undefined) result[chatId] = last;
+        }
+        return result;
+    }, [state.messagesByChat]);
+
+    const sortedChats = useMemo(() => 
+        [...state.chats].sort(
+            (a, b) =>
+            (lastMessages[b.chatId]?.timestamp ?? Number.MAX_SAFE_INTEGER) - 
+            (lastMessages[a.chatId]?.timestamp ?? Number.MAX_SAFE_INTEGER),
+        ),
+    [state.chats, lastMessages],
+    );
+
     const value = useMemo<ChatContextValue>(
         () => ({
             credentials,
-            chats: state.chats,
+            chats: sortedChats,
             activeChatId,
             messages,
             error,
@@ -312,11 +330,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             closeChat,
             sendMessage,
             retryMessage,
+            lastMessages,
             dismissError,
         }),
         [
             credentials,
-            state.chats,
+            sortedChats,
             activeChatId,
             messages,
             error,
@@ -327,6 +346,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             closeChat,
             sendMessage,
             retryMessage,
+            lastMessages,
             dismissError,
         ],
     );

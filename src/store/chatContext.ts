@@ -6,6 +6,7 @@ export type ActionResult = { ok: true } | { ok: false; error: string };
 export interface ChatContextValue {
     credentials: Credentials | null;
     chats: Chat[];
+    lastMessages: Record<string, ChatMessage>;
     activeChatId: string | null;
     messages: ChatMessage[];
     error: string | null;

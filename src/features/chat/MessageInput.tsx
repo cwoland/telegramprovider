@@ -35,6 +35,7 @@ export function MessageInput() {
   return (
     <form className={styles.form} onSubmit={handleSubmit}>
       <label className={styles.visuallyHidden} htmlFor="message">
+        Текст сообщения
       </label>
       <textarea
         id="message"
