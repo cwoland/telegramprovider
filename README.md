@@ -1,75 +1,117 @@
-# React + TypeScript + Vite
+# Чат через GREEN-API
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Веб-интерфейс для переписки в Telegram через [GREEN-API](https://green-api.com): вход по учётным
+данным инстанса, создание чата по номеру телефона, отправка и получение текстовых сообщений.
 
-Currently, two official plugins are available:
+## Стек
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+React 19 · TypeScript 6 · Vite 8 · CSS Modules · ESLint 10 · Vitest 5 + React Testing Library · MSW
 
-## React Compiler
+Зависимостей времени выполнения, кроме `react` и `react-dom`, нет: HTTP — нативный `fetch`,
+состояние — `useReducer` + контекст, маршрутизации не требуется (два экрана).
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Быстрый старт
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```bash
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+```bash
+npm run dev
+```
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Откройте адрес, который напечатает Vite, и введите параметры доступа из личного кабинета GREEN-API.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Учётные данные
+
+Берутся в [console.green-api.com](https://console.green-api.com) после создания и авторизации
+инстанса:
+
+| Поле | Где взять | Пример |
+|---|---|---|
+| `apiUrl` | личный кабинет, раздел инстанса | `https://api.green-api.com` |
+| `idInstance` | там же | `1101123456` |
+| `apiTokenInstance` | там же | `d75b3a66374942c5b3c019c698abc2067e151558acbd412345` |
+
+Инстанс должен быть в состоянии `authorized` — приложение проверяет это при входе и не пускает
+дальше, если телефон не привязан.
+
+## Настройки инстанса
+
+**После создания инстанса все уведомления в GREEN-API выключены.** Пока `incomingWebhook`
+выключен, входящие сообщения не попадают в очередь `receiveNotification`, и ответы собеседника
+не приходят — при этом отправка работает, что выглядит обманчиво.
+
+Приложение решает это само: при входе оно читает `getSettings` и, если чего-то не хватает,
+включает через `setSettings`:
+
+- `incomingWebhook` — входящие сообщения (обязательно);
+- `outgoingMessageWebhook` — сообщения, отправленные вами с телефона;
+- `outgoingAPIMessageWebhook` — эхо отправок через API (нужно для статусов доставки).
+
+## Как это устроено
 
 ```
+src/
+  api/          клиент GREEN-API, типы ответов, разбор уведомлений
+  store/        редьюсер чатов, контекст, провайдер
+  hooks/        цикл длинного опроса уведомлений
+  lib/          нормализация телефона, localStorage
+  features/     экраны: вход, чат
+  components/   примитивы: аватар, плашка ошибки
+  test/         фикстуры и обработчики MSW
+```
+
+### Получение сообщений
+
+GREEN-API отдаёт уведомления очередью через HTTP API: `receiveNotification` держит соединение до
+`receiveTimeout` секунд, а обработанное уведомление обязательно удаляется через
+`deleteNotification` — иначе оно возвращается снова и очередь встаёт.
+
+Цикл опроса живёт в `useNotificationPolling`:
+
+- один `AbortController` на эффект, поэтому двойное монтирование в `StrictMode` не порождает
+  второй цикл — первый обрывается до того, как успеет получить ответ;
+- `deleteNotification` вызывается в `finally`: уведомление, которое уронило обработчик, всё равно
+  уходит из очереди и не блокирует чат навсегда;
+- ошибки — экспоненциальный backoff с потолком 30 с, для `429` — отдельная пауза.
+
+### Два идентификатора собеседника
+
+Отправлять можно на `79991234567@c.us`, но **во всех уведомлениях приходит числовой Telegram id**
+(`1777771364`). Если ключевать чат телефоном, эхо собственного сообщения создаст второй чат на
+того же человека, и ответы придут туда.
+
+Поэтому при создании чата номер резолвится через `checkAccount`, и ключом становится
+канонический `chatId` из ответа. Заодно это отсекает номера без Telegram: на них `sendMessage`
+вернул бы `200` и `idMessage`, но сообщение никуда бы не ушло.
+
+### Дедупликация
+
+Одно и то же сообщение приходит до трёх раз: оптимистично при отправке, ответом `sendMessage`
+и уведомлением `outgoingAPIMessageReceived`. Редьюсер сливает их по `idMessage`, а статус
+только повышается по шкале `failed → pending → sent → delivered → read`, поэтому уведомления,
+пришедшие не по порядку, не понижают «прочитано» обратно до «отправлено».
+
+### Хранение
+
+В `localStorage` лежат учётные данные (`greenapi:credentials`) и история (`greenapi:history`,
+до 30 чатов и 200 последних сообщений в каждом). История привязана к `idInstance`: при входе под
+другим инстансом она не восстанавливается. Выход очищает оба ключа.
+
+Данные из хранилища проверяются рантайм-гардами, а не приводятся типом: значение могло
+остаться от прошлой версии приложения или быть отредактировано вручную.
+
+## Скрипты
+
+| Команда | Что делает |
+|---|---|
+| `npm run dev` | дев-сервер |
+| `npm run build` | проверка типов и продовая сборка |
+| `npm run preview` | просмотр собранного |
+| `npm run typecheck` | только проверка типов |
+| `npm run lint` | ESLint |
+| `npm run format` | Prettier |
+| `npm run test` | тесты один раз |
+| `npm run test:watch` | тесты в watch-режиме |
+| `npm run test:coverage` | тесты с отчётом о покрытии |

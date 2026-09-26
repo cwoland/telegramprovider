@@ -1,8 +1,33 @@
-import type { ChatMessage, MessageDirection } from '../types';
+import type { ChatMessage, MessageDirection, MessageStatus } from '../types';
 import type { MessageData, NotificationBody } from './types';
 
 const INCOMING_WEBHOOKS = ['incomingMessageReceived'] as const;
 const OUTGOING_WEBHOOKS = ['outgoingMessageReceived', 'outgoingAPIMessageReceived'] as const;
+
+const DELIVERY_STATUSES: Record<string, MessageStatus> = {
+    sent: 'sent',
+    delivered: 'delivered',
+    read: 'read',
+    failed: 'failed',
+    noAccount: 'failed',
+    notInGroup: 'failed',
+};
+
+export interface StatusUpdate {
+    idMessage: string;
+    status: MessageStatus;
+    chatId?: string;
+}
+
+export function toStatusUpdate(body: NotificationBody): StatusUpdate | null {
+    if (body.typeWebhook !== 'outgoingMessageStatus') return null;
+    if (!body.idMessage || body.status === undefined) return null;
+
+    const status = DELIVERY_STATUSES[body.status];
+    if (status === undefined) return null;
+
+    return { idMessage: body.idMessage, status, chatId: body.chatId };
+}
 
 function resolveDirection(typeWebhook: string): MessageDirection | null {
     if ((INCOMING_WEBHOOKS as readonly string[]).includes(typeWebhook)) return 'incoming';

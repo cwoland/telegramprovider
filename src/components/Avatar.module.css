@@ -5,20 +5,29 @@
   overflow: hidden;
   border-radius: 50%;
   background: var(--color-accent);
-  color: var(--color-on-accent);
+  background: oklch(60% 0.14 var(--avatar-hue));
+  color: #fff;
   font-weight: 600;
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .avatar {
+    background: oklch(58% 0.12 var(--avatar-hue));
+  }
 }
 
 .avatar[data-size='md'] {
-  width: 40px;
-  height: 40px;
-  font-size: 13px;
+  width: 42px;
+  height: 42px;
+  font-size: var(--text-sm);
 }
 
 .avatar[data-size='sm'] {
-  width: 32px;
-  height: 32px;
-  font-size: 11px;
+  width: 34px;
+  height: 34px;
+  font-size: var(--text-meta);
 }
 
 .image {

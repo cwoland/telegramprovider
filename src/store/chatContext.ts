@@ -16,6 +16,7 @@ export interface ChatContextValue {
     selectChat(chatId: string): void;
     closeChat(): void;
     sendMessage(text: string): Promise<void>;
+    retryMessage(message: ChatMessage): Promise<void>;
     dismissError(): void;
 }
 

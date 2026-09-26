@@ -1,13 +1,28 @@
-import { useCallback, useMemo, useReducer, useState, useRef, type ReactNode } from 'react';
+import {
+    useCallback,
+    useEffect,
+    useMemo,
+    useReducer,
+    useRef,
+    useState,
+    type ReactNode,
+} from 'react';
 import { GreenApiError, createGreenApiClient } from '../api/greenApi';
-import { resolveChatTitle, toChatMessage } from '../api/notification';
+import { resolveChatTitle, toChatMessage, toStatusUpdate } from '../api/notification';
 import type { NotificationBody, SettingsPatch } from '../api/types';
 import { useNotificationPolling } from '../hooks/useNotificationPolling';
 import { chatIdToDigits, formatPhone, parseRecipient } from '../lib/phone';
-import { clearCredentials, loadCredentials, saveCredentials } from '../lib/storage';
+import {
+    clearCredentials,
+    clearHistory,
+    loadCredentials,
+    loadHistory,
+    saveCredentials,
+    saveHistory,
+} from '../lib/storage';
 import type { ChatMessage, Credentials } from '../types';
 import { ChatContext, type ActionResult, type ChatContextValue } from './chatContext';
-import { chatReducer, initialChatState } from './chatReducer';
+import { chatReducer, initialChatState, type ChatState } from './chatReducer';
 
 const NO_MESSAGES: ChatMessage[] = [];
 
@@ -20,9 +35,9 @@ const STATE_MESSAGES: Record<string, string> = {
 };
 
 const REQUIRED_SETTINGS: SettingsPatch = {
-  incomingWebhook: 'yes',
-  outgoingMessageWebhook: 'yes',
-  outgoingAPIMessageWebhook: 'yes',
+    incomingWebhook: 'yes',
+    outgoingMessageWebhook: 'yes',
+    outgoingAPIMessageWebhook: 'yes',
 };
 
 let localIdCounter = 0;
@@ -45,9 +60,22 @@ function resolveTitle(body: NotificationBody, message: ChatMessage): string {
     return name !== null && name !== message.chatId ? name : fallback;
 }
 
+function createInitialState(credentials: Credentials | null): ChatState {
+    if (credentials === null) return initialChatState;
+
+    const restored = loadHistory(credentials.idInstance);
+    if (restored === null) return initialChatState;
+
+    return {
+        chats: restored.chats,
+        messagesByChat: restored.messagesByChat,
+        activeChatId: restored.activeChatId,
+    };
+}
+
 export function ChatProvider({ children }: { children: ReactNode }) {
     const [credentials, setCredentials] = useState<Credentials | null>(loadCredentials);
-    const [state, dispatch] = useReducer(chatReducer, initialChatState);
+    const [state, dispatch] = useReducer(chatReducer, credentials, createInitialState);
     const [error, setError] = useState<string | null>(null);
     const avatarRequestRef = useRef(new Set<string>());
 
@@ -55,6 +83,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         () => (credentials === null ? null : createGreenApiClient(credentials)),
         [credentials],
     );
+
+    useEffect(() => {
+        if (credentials === null) return;
+
+        saveHistory({
+            idInstance: credentials.idInstance,
+            chats: state.chats,
+            messagesByChat: state.messagesByChat,
+            activeChatId: state.activeChatId,
+        });
+    }, [credentials, state]);
 
     const loadAvatar = useCallback(
         (chatId: string) => {
@@ -79,6 +118,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const handleNotification = useCallback((body: NotificationBody) => {
         setError(null);
 
+        const statusUpdate = toStatusUpdate(body);
+        if (statusUpdate !== null) {
+            dispatch({ type: 'message/status', payload: statusUpdate });
+            return;
+        }
+
         const message = toChatMessage(body);
         if (message === null) return;
 
@@ -101,46 +146,47 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     });
 
     const login = useCallback(async (next: Credentials): Promise<ActionResult> => {
-    const probe = createGreenApiClient(next);
+        const probe = createGreenApiClient(next);
 
-    try {
-      const { stateInstance } = await probe.getStateInstance();
-      if (stateInstance !== 'authorized') {
-        return {
-          ok: false,
-          error: STATE_MESSAGES[stateInstance] ?? `Инстанс в состоянии «${stateInstance}»`,
-        };
-      }
+        try {
+            const { stateInstance } = await probe.getStateInstance();
+            if (stateInstance !== 'authorized') {
+                return {
+                    ok: false,
+                    error: STATE_MESSAGES[stateInstance] ?? `Инстанс в состоянии «${stateInstance}»`,
+                };
+            }
 
-      const settings = await probe.getSettings();
+            const settings = await probe.getSettings();
 
-      if ((settings.webhookUrl ?? '').trim() !== '') {
-        return {
-          ok: false,
-          error:
-            'В настройках инстанса задан webhookUrl — уведомления уходят на ваш сервер, ' +
-            'а не в очередь HTTP API. Очистите webhookUrl в личном кабинете GREEN-API.',
-        };
-      }
+            if ((settings.webhookUrl ?? '').trim() !== '') {
+                return {
+                    ok: false,
+                    error:
+                        'В настройках инстанса задан webhookUrl — уведомления уходят на ваш сервер, ' +
+                        'а не в очередь HTTP API. Очистите webhookUrl в личном кабинете GREEN-API.',
+                };
+            }
 
-      const isMissing = Object.entries(REQUIRED_SETTINGS).some(
-        ([key, value]) => settings[key as keyof typeof settings] !== value,
-      );
-        if (isMissing) {
-            await probe.setSettings(REQUIRED_SETTINGS);
+            const isMissing = Object.entries(REQUIRED_SETTINGS).some(
+                ([key, value]) => settings[key as keyof typeof settings] !== value,
+            );
+            if (isMissing) {
+                await probe.setSettings(REQUIRED_SETTINGS);
+            }
+        } catch (loginError) {
+            return { ok: false, error: toErrorMessage(loginError) };
         }
-    } catch (loginError) {
-        return { ok: false, error: toErrorMessage(loginError) };
-    }
 
-    saveCredentials(next);
-    setCredentials(next);
-    setError(null);
-    return { ok: true };
+        saveCredentials(next);
+        setCredentials(next);
+        setError(null);
+        return { ok: true };
     }, []);
 
     const logout = useCallback(() => {
         clearCredentials();
+        clearHistory();
         setCredentials(null);
         setError(null);
         dispatch({ type: 'state/reset' });
@@ -174,15 +220,34 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         [client, loadAvatar],
     );
 
-    const selectChat = useCallback((chatId: string) => {
-        dispatch({ type: 'chat/selected', payload: { chatId } });
-    }, []);
+    const selectChat = useCallback(
+        (chatId: string) => {
+            dispatch({ type: 'chat/selected', payload: { chatId } });
+            loadAvatar(chatId);
+        },
+        [loadAvatar],
+    );
 
     const closeChat = useCallback(() => {
         dispatch({ type: 'chat/closed' });
     }, []);
 
     const { activeChatId } = state;
+
+    const deliver = useCallback(
+        async (chatId: string, localId: string, text: string): Promise<void> => {
+            if (client === null) return;
+
+            try {
+                const { idMessage } = await client.sendMessage({ chatId, message: text });
+                dispatch({ type: 'message/sent', payload: { chatId, localId, idMessage } });
+            } catch (sendError) {
+                dispatch({ type: 'message/failed', payload: { chatId, localId } });
+                setError(toErrorMessage(sendError));
+            }
+        },
+        [client],
+    );
 
     const sendMessage = useCallback(
         async (text: string): Promise<void> => {
@@ -204,15 +269,24 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 },
             });
 
-            try {
-                const { idMessage } = await client.sendMessage({ chatId: activeChatId, message: trimmed });
-                dispatch({ type: 'message/sent', payload: { chatId: activeChatId, localId, idMessage } });
-            } catch (sendError) {
-                dispatch({ type: 'message/failed', payload: { chatId: activeChatId, localId } });
-                setError(toErrorMessage(sendError));
-            }
+            await deliver(activeChatId, localId, trimmed);
         },
-        [client, activeChatId],
+        [client, activeChatId, deliver],
+    );
+
+    const retryMessage = useCallback(
+        async (message: ChatMessage): Promise<void> => {
+            if (client === null || message.status !== 'failed') return;
+
+            setError(null);
+            dispatch({
+                type: 'message/retry',
+                payload: { chatId: message.chatId, localId: message.id },
+            });
+
+            await deliver(message.chatId, message.id, message.text);
+        },
+        [client, deliver],
     );
 
     const dismissError = useCallback(() => {
@@ -237,6 +311,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             selectChat,
             closeChat,
             sendMessage,
+            retryMessage,
             dismissError,
         }),
         [
@@ -251,6 +326,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             selectChat,
             closeChat,
             sendMessage,
+            retryMessage,
             dismissError,
         ],
     );
