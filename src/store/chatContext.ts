@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react';
+import type { PollingStatus } from '../hooks/useNotificationPolling';
 import type { Chat, ChatMessage, Credentials } from '../types';
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -10,6 +11,7 @@ export interface ChatContextValue {
     activeChatId: string | null;
     messages: ChatMessage[];
     error: string | null;
+    connection: PollingStatus;
 
     login(credentials: Credentials): Promise<ActionResult>;
     logout(): void;
@@ -19,6 +21,7 @@ export interface ChatContextValue {
     sendMessage(text: string): Promise<void>;
     retryMessage(message: ChatMessage): Promise<void>;
     dismissError(): void;
+    notifyTyping(): void;
 }
 
 export const ChatContext = createContext<ChatContextValue | null>(null);

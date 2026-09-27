@@ -6,7 +6,7 @@ import styles from './MessageInput.module.css';
 const COUNTER_THRESHOLD = 200;
 
 export function MessageInput() {
-  const { sendMessage, activeChatId } = useChat();
+  const { sendMessage, notifyTyping, activeChatId } = useChat();
   const [text, setText] = useState('');
 
   const trimmed = text.trim();
@@ -41,7 +41,10 @@ export function MessageInput() {
         id="message"
         className={styles.field}
         value={text}
-        onChange={(event) => setText(event.target.value)}
+        onChange={(event) => {
+          setText(event.target.value); 
+          notifyTyping();
+        }}
         onKeyDown={handleKeyDown}
         placeholder="Написать сообщение…"
         rows={1}

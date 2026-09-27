@@ -10,7 +10,7 @@ import {
 import { GreenApiError, createGreenApiClient } from '../api/greenApi';
 import { resolveChatTitle, toChatMessage, toStatusUpdate } from '../api/notification';
 import type { NotificationBody, SettingsPatch } from '../api/types';
-import { useNotificationPolling } from '../hooks/useNotificationPolling';
+import { useNotificationPolling, type PollingStatus } from '../hooks/useNotificationPolling';
 import { chatIdToDigits, formatPhone, parseRecipient } from '../lib/phone';
 import {
     clearCredentials,
@@ -38,7 +38,11 @@ const REQUIRED_SETTINGS: SettingsPatch = {
     incomingWebhook: 'yes',
     outgoingMessageWebhook: 'yes',
     outgoingAPIMessageWebhook: 'yes',
+    stateWebhook: 'yes',
+    markIncomingMessagesReadedOnReply: 'yes',
 };
+
+const TYPING_THROTTLE_MS = 4_000;
 
 let localIdCounter = 0;
 
@@ -77,7 +81,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const [credentials, setCredentials] = useState<Credentials | null>(loadCredentials);
     const [state, dispatch] = useReducer(chatReducer, credentials, createInitialState);
     const [error, setError] = useState<string | null>(null);
+    const [connection, setConnection] = useState<PollingStatus>('connecting');
     const avatarRequestRef = useRef(new Set<string>());
+    const typingSentAtRef = useRef(0);
 
     const client = useMemo(
         () => (credentials === null ? null : createGreenApiClient(credentials)),
@@ -116,7 +122,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     );
 
     const handleNotification = useCallback((body: NotificationBody) => {
-        setError(null);
+        if (body.typeWebhook === 'stateInstanceChanged') {
+            const stateInstance = body.stateInstance ?? '';
+            if (stateInstance !== 'authorized') {
+                setError(STATE_MESSAGES[stateInstance] ?? `Инстанс в состоянии «${stateInstance}»`);
+            }
+            return;
+        }
 
         const statusUpdate = toStatusUpdate(body);
         if (statusUpdate !== null) {
@@ -138,11 +150,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setError(toErrorMessage(pollingError));
     }, []);
 
+    const handleStatusChange = useCallback((status: PollingStatus) => {
+        setConnection(status);
+        if (status === 'online') setError(null);
+    }, []);
+
     useNotificationPolling({
         client,
         enabled: client !== null,
         onNotification: handleNotification,
         onError: handlePollingError,
+        onStatusChange: handleStatusChange,
     });
 
     const login = useCallback(async (next: Credentials): Promise<ActionResult> => {
@@ -316,6 +334,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [state.chats, lastMessages],
     );
 
+    const notifyTyping = useCallback(() => {
+        if (client === null || activeChatId === null) return;
+
+        const now = Date.now();
+        if (now - typingSentAtRef.current < TYPING_THROTTLE_MS) return;
+        typingSentAtRef.current = now;
+
+        void client.sendTyping(activeChatId).catch(() => {
+            typingSentAtRef.current = 0;
+        });
+    }, [client, activeChatId]);
+
     const value = useMemo<ChatContextValue>(
         () => ({
             credentials,
@@ -323,6 +353,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             activeChatId,
             messages,
             error,
+            connection,
             login,
             logout,
             openChat,
@@ -332,6 +363,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             retryMessage,
             lastMessages,
             dismissError,
+            notifyTyping,
         }),
         [
             credentials,
@@ -339,6 +371,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             activeChatId,
             messages,
             error,
+            connection,
             login,
             logout,
             openChat,
@@ -348,6 +381,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             retryMessage,
             lastMessages,
             dismissError,
+            notifyTyping,
         ],
     );
 

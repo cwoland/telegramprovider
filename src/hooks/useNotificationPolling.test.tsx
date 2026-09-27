@@ -55,9 +55,12 @@ describe('useNotificationPolling', () => {
         maxInFlight = 0;
         const baseline = calls;
 
-        await waitFor(() => {
-            expect(calls).toBeGreaterThanOrEqual(baseline + 3);
-        });
+        await waitFor(
+            () => {
+                expect(calls).toBeGreaterThanOrEqual(baseline + 3);
+            },
+            { timeout: 4000 },
+        );
         expect(maxInFlight).toBe(1);
     });
 

@@ -1,5 +1,6 @@
 import { Avatar } from '../../components/Avatar';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import type { PollingStatus } from '../../hooks/useNotificationPolling';
 import { useChat } from '../../store/chatContext';
 import { ChatList } from './ChatList';
 import styles from './ChatLayout.module.css';
@@ -7,8 +8,14 @@ import { MessageInput } from './MessageInput';
 import { MessageList } from './MessageList';
 import { NewChatForm } from './NewChatForm';
 
+const CONNECTION_LABELS: Record<PollingStatus, string> = {
+    connecting: 'подключение…',
+    online: 'на связи',
+    offline: 'нет связи',
+};
+
 export function ChatLayout() {
-    const { chats, activeChatId, error, logout, closeChat, dismissError } = useChat();
+    const { chats, activeChatId, error, connection, logout, closeChat, dismissError } = useChat();
     const activeChat = chats.find((chat) => chat.chatId === activeChatId) ?? null;
 
     return (
@@ -49,7 +56,12 @@ export function ChatLayout() {
                                 url={activeChat.avatarUrl}
                                 size="sm"
                             />
-                            <h1 className={styles.chatTitle}>{activeChat.title}</h1>
+                            <span className={styles.chatMeta}>
+                                <h1 className={styles.chatTitle}>{activeChat.title}</h1>
+                                <span className={styles.connection} data-state={connection}>
+                                    {CONNECTION_LABELS[connection]}
+                                </span>
+                            </span>
                         </header>
                         {error !== null && <ErrorBanner message={error} onDismiss={dismissError} />}
                         <MessageList />

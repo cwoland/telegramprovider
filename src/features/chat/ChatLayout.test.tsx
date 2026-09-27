@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { HttpResponse, http } from 'msw';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -58,7 +58,8 @@ describe('сценарий из ТЗ', () => {
             incomingTextNotification({ text: 'И тебе привет', idMessage: 'in-1' }),
         );
 
-        expect(await screen.findByText('И тебе привет')).toBeInTheDocument();
+        const log = await screen.findByRole('log');
+        expect(await within(log).findByText('И тебе привет')).toBeInTheDocument();
         await waitFor(() => {
             expect(queue.deleted).toEqual([receiptId]);
         });
@@ -212,8 +213,12 @@ describe('восстановление и выход', () => {
 
         renderApp();
 
-        expect(await screen.findByText('Сообщение из прошлой сессии')).toBeInTheDocument();
+        const log = await screen.findByRole('log');
+        expect(within(log).getByText('Сообщение из прошлой сессии')).toBeInTheDocument();
         expect(screen.getByRole('heading', { name: TEST_PHONE_DISPLAY })).toBeInTheDocument();
+
+        const sidebar = screen.getByRole('navigation', { name: 'Список чатов' });
+        expect(within(sidebar).getByText('Сообщение из прошлой сессии')).toBeInTheDocument();
     });
 
     it('не поднимает историю другого инстанса', () => {

@@ -80,6 +80,8 @@ describe('LoginForm', () => {
                 incomingWebhook: 'yes',
                 outgoingMessageWebhook: 'yes',
                 outgoingAPIMessageWebhook: 'yes',
+                stateWebhook: 'yes',
+                markIncomingMessagesReadedOnReply: 'yes',
             },
         ]);
     });

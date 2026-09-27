@@ -39,6 +39,8 @@ export function settingsHandler(overrides: Record<string, string> = {}) {
             outgoingMessageWebhook: 'yes',
             outgoingAPIMessageWebhook: 'yes',
             stateWebhook: 'yes',
+            markIncomingMessagesReaded: 'no',
+            markIncomingMessagesReadedOnReply: 'yes',
             ...overrides,
         }),
     );

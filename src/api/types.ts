@@ -73,6 +73,8 @@ export interface DeleteNotificationResponse {
 
 export interface InstanceSettings {
     webhookUrl?: string;
+    markIncomingMessagesReaded?: string;
+    markIncomingMessagesReadedOnReply?: string;
     incomingWebhook?: string;
     outgoingWebhook?: string;
     outgoingMessageWebhook?: string;

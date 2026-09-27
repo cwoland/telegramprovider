@@ -16,6 +16,8 @@ export const MAX_MESSAGE_LENGTH = 4000;
 
 export const DEFAULT_RECEIVE_TIMEOUT_SECONDS = 10;
 
+export const DEFAULT_TYPING_TIME_MS = 5_000;
+
 const DEFAULT_TIMEOUT_MS = 20_000;
 
 const RECEIVE_TIMEOUT_SLACK_MS = 10_000;
@@ -144,8 +146,8 @@ export interface GreenApiClient {
   getSettings(options?: RequestOptions): Promise<InstanceSettings>;
   setSettings(patch: SettingsPatch, options?: RequestOptions): Promise<void>;
   getAvatar(chatId: string, options?: RequestOptions): Promise<string | null>;
-  /** Проверяет наличие Telegram по номеру и возвращает канонический chatId. */
   checkAccount(phoneNumber: string, options?: RequestOptions): Promise<CheckAccountResponse>;
+  sendTyping(chatId: string, typingTime?: number, options?: RequestOptions): Promise<void>;
 }
 
 export function createGreenApiClient(credentials: Credentials): GreenApiClient {
@@ -243,6 +245,19 @@ export function createGreenApiClient(credentials: Credentials): GreenApiClient {
         options,
       );
       return requireBody(data, url);
+    },
+
+    async sendTyping(chatId, typingTime = DEFAULT_TYPING_TIME_MS, options) {
+      const url = buildUrl(credentials, 'sendTyping');
+      await request<unknown>(
+        url,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chatId, typingTime }),
+        },
+        options,
+      );
     },
   };
 }

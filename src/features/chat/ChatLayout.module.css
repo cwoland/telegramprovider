@@ -147,3 +147,34 @@
     display: none;
   }
 }
+
+.chatMeta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.connection {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-meta);
+  color: var(--color-text-muted);
+}
+
+.connection::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.connection[data-state='online'] {
+  color: var(--color-success);
+}
+
+.connection[data-state='offline'] {
+  color: var(--color-danger);
+}
